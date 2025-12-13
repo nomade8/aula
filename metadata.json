@@ -1,0 +1,5 @@
+{
+  "name": "Aula",
+  "description": "A minimalist, dark-themed interactive blackboard with smart shape recognition and vector drawing capabilities.",
+  "requestFramePermissions": []
+}
