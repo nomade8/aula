@@ -29,11 +29,11 @@ const COLORS = [
   { hex: '#3b82f6', label: 'Blue' }, // Blue-500
 ];
 
-const Toolbar: React.FC<ToolbarProps> = ({ 
-  activeTool, 
+const Toolbar: React.FC<ToolbarProps> = ({
+  activeTool,
   activeColor,
   activeWidth,
-  onSelectTool, 
+  onSelectTool,
   onChangeColor,
   onChangeWidth,
   onClear,
@@ -45,6 +45,42 @@ const Toolbar: React.FC<ToolbarProps> = ({
   onTogglePlay,
   onVolumeChange
 }) => {
+  const [position, setPosition] = React.useState({ x: 0, y: 0 });
+  const isDragging = React.useRef(false);
+  const dragStart = React.useRef({ x: 0, y: 0 });
+
+  React.useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging.current) return;
+      setPosition({
+        x: e.clientX - dragStart.current.x,
+        y: e.clientY - dragStart.current.y
+      });
+    };
+
+    const handleMouseUp = () => {
+      isDragging.current = false;
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    // Prevent drag if clicking strictly on controls (buttons/inputs)
+    if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).closest('button')) {
+      return;
+    }
+
+    isDragging.current = true;
+    dragStart.current = { x: e.clientX - position.x, y: e.clientY - position.y };
+  };
+
   const getButtonClass = (tool: ToolType) => {
     const base = "p-3 rounded-full transition-all duration-200 flex items-center justify-center";
     return activeTool === tool
@@ -57,28 +93,32 @@ const Toolbar: React.FC<ToolbarProps> = ({
 
   return (
     <div className="fixed bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-4 z-50">
-      
+
       {/* Properties Bar: Either Drawing Config OR Video Controls */}
       {showProperties && (
-        <div className="bg-neutral-900/90 backdrop-blur-md border border-neutral-800 rounded-2xl px-4 py-3 flex items-center gap-6 shadow-xl animate-in slide-in-from-bottom-4 fade-in duration-300">
-          
+        <div
+          onMouseDown={handleMouseDown}
+          style={{ transform: `translate(${position.x}px, ${position.y}px)` }}
+          className="bg-neutral-900/90 backdrop-blur-md border border-neutral-800 rounded-2xl px-4 py-3 flex items-center gap-6 shadow-xl animate-in slide-in-from-bottom-4 fade-in duration-300 cursor-move"
+        >
+
           {selectedVideo ? (
             // --- VIDEO CONTROLS ---
             <div className="flex items-center gap-4">
-              <button 
+              <button
                 onClick={onTogglePlay}
                 className="w-10 h-10 rounded-full flex items-center justify-center bg-white text-black hover:scale-110 transition-transform"
               >
-                {isVideoPlaying ? <Pause size={20} fill="black" /> : <Play size={20} fill="black" className="ml-0.5"/>}
+                {isVideoPlaying ? <Pause size={20} fill="black" /> : <Play size={20} fill="black" className="ml-0.5" />}
               </button>
 
               <div className="w-px h-6 bg-neutral-700"></div>
 
               <div className="flex items-center gap-3">
-                 <button onClick={() => onVolumeChange && onVolumeChange(videoVolume === 0 ? 1 : 0)}>
-                   {videoVolume === 0 ? <VolumeX size={20} /> : <Volume2 size={20} />}
-                 </button>
-                 <input 
+                <button onClick={() => onVolumeChange && onVolumeChange(videoVolume === 0 ? 1 : 0)}>
+                  {videoVolume === 0 ? <VolumeX size={20} /> : <Volume2 size={20} />}
+                </button>
+                <input
                   type="range"
                   min="0"
                   max="1"
@@ -86,7 +126,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
                   value={videoVolume || 0}
                   onChange={(e) => onVolumeChange && onVolumeChange(parseFloat(e.target.value))}
                   className="w-24 h-1 bg-neutral-700 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full hover:[&::-webkit-slider-thumb]:scale-125 transition-all"
-                 />
+                />
               </div>
             </div>
           ) : (
@@ -110,11 +150,11 @@ const Toolbar: React.FC<ToolbarProps> = ({
               {/* Stroke Slider */}
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-neutral-500"></div>
-                <input 
-                  type="range" 
-                  min="1" 
-                  max="20" 
-                  value={activeWidth} 
+                <input
+                  type="range"
+                  min="1"
+                  max="20"
+                  value={activeWidth}
                   onChange={(e) => onChangeWidth(Number(e.target.value))}
                   className="w-24 h-1 bg-neutral-700 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full hover:[&::-webkit-slider-thumb]:scale-110 transition-all"
                   title={`Stroke width: ${activeWidth}px`}
@@ -129,33 +169,33 @@ const Toolbar: React.FC<ToolbarProps> = ({
 
       {/* Main Toolbar */}
       <div className="bg-neutral-900/90 backdrop-blur-md border border-neutral-800 rounded-2xl px-2 py-2 flex items-center gap-2 shadow-2xl">
-        
-        <button 
-          onClick={() => onSelectTool(ToolType.SELECT)} 
+
+        <button
+          onClick={() => onSelectTool(ToolType.SELECT)}
           className={getButtonClass(ToolType.SELECT)}
           title="Select & Move"
         >
           <MousePointer2 size={24} />
         </button>
 
-        <button 
-          onClick={() => onSelectTool(ToolType.PENCIL)} 
+        <button
+          onClick={() => onSelectTool(ToolType.PENCIL)}
           className={getButtonClass(ToolType.PENCIL)}
           title="Freehand Draw"
         >
           <Pencil size={24} />
         </button>
 
-        <button 
-          onClick={() => onSelectTool(ToolType.TEXT)} 
+        <button
+          onClick={() => onSelectTool(ToolType.TEXT)}
           className={getButtonClass(ToolType.TEXT)}
           title="Add Text"
         >
           <Type size={24} />
         </button>
 
-        <button 
-          onClick={() => onSelectTool(ToolType.SHAPE)} 
+        <button
+          onClick={() => onSelectTool(ToolType.SHAPE)}
           className={getButtonClass(ToolType.SHAPE)}
           title="Smart Shape"
         >
@@ -165,16 +205,16 @@ const Toolbar: React.FC<ToolbarProps> = ({
         <div className="w-px h-8 bg-neutral-700 mx-1"></div>
 
         {/* Media Tools */}
-        <button 
-          onClick={onUploadImage} 
+        <button
+          onClick={onUploadImage}
           className="p-3 rounded-full text-neutral-400 hover:text-white hover:bg-neutral-800 transition-all"
           title="Upload Image"
         >
           <ImageIcon size={24} />
         </button>
 
-        <button 
-          onClick={onUploadVideo} 
+        <button
+          onClick={onUploadVideo}
           className="p-3 rounded-full text-neutral-400 hover:text-white hover:bg-neutral-800 transition-all"
           title="Upload Video"
         >
@@ -183,7 +223,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
 
         <div className="w-px h-8 bg-neutral-700 mx-1"></div>
 
-        <button 
+        <button
           onClick={onClear}
           className="p-3 text-red-500 hover:bg-red-900/30 rounded-full transition-colors"
           title="Clear Board"
