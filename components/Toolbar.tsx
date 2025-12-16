@@ -45,40 +45,83 @@ const Toolbar: React.FC<ToolbarProps> = ({
   onTogglePlay,
   onVolumeChange
 }) => {
+  // Initialize in center-bottom
   const [position, setPosition] = React.useState({ x: 0, y: 0 });
+  const [isVertical, setIsVertical] = React.useState(false);
+  const [verticalSide, setVerticalSide] = React.useState<'left' | 'right'>('left');
+  const [isInitialized, setIsInitialized] = React.useState(false);
+
   const isDragging = React.useRef(false);
-  const dragStart = React.useRef({ x: 0, y: 0 });
+  const dragOffset = React.useRef({ x: 0, y: 0 });
+
+  React.useEffect(() => {
+    // Set initial position centered at bottom
+    setPosition({
+      x: window.innerWidth / 2,
+      y: window.innerHeight - 100
+    });
+    setIsInitialized(true);
+  }, []);
 
   React.useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDragging.current) return;
-      setPosition({
-        x: e.clientX - dragStart.current.x,
-        y: e.clientY - dragStart.current.y
-      });
+
+      let newX = e.clientX - dragOffset.current.x;
+      let newY = e.clientY - dragOffset.current.y;
+
+      // Boundary checks to keep it on screen
+      const margin = 20;
+      newX = Math.max(margin, Math.min(window.innerWidth - margin, newX));
+      newY = Math.max(margin, Math.min(window.innerHeight - margin, newY));
+
+      setPosition({ x: newX, y: newY });
+
+      // Check orientation based on X position
+      const edgeThreshold = 100; // px from edge
+
+      if (newX < edgeThreshold) {
+        setIsVertical(true);
+        setVerticalSide('left');
+      } else if (newX > window.innerWidth - edgeThreshold) {
+        setIsVertical(true);
+        setVerticalSide('right');
+      } else {
+        setIsVertical(false);
+      }
     };
 
     const handleMouseUp = () => {
       isDragging.current = false;
+      document.body.style.userSelect = '';
     };
 
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
+    if (isInitialized) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
 
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, []);
+  }, [isInitialized]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    // Prevent drag if clicking strictly on controls (buttons/inputs)
-    if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).closest('button')) {
+    // Prevent drag if clicking strictly on interactive controls
+    if (
+      (e.target as HTMLElement).tagName === 'INPUT' ||
+      (e.target as HTMLElement).closest('button')
+    ) {
       return;
     }
 
     isDragging.current = true;
-    dragStart.current = { x: e.clientX - position.x, y: e.clientY - position.y };
+    dragOffset.current = {
+      x: e.clientX - position.x,
+      y: e.clientY - position.y
+    };
+    document.body.style.userSelect = 'none'; // Prevent text selection while dragging
   };
 
   const getButtonClass = (tool: ToolType) => {
@@ -91,20 +134,32 @@ const Toolbar: React.FC<ToolbarProps> = ({
   // Determine what to show in the properties bar
   const showProperties = activeTool === ToolType.PENCIL || activeTool === ToolType.SHAPE || activeTool === ToolType.TEXT || activeTool === ToolType.SELECT;
 
-  return (
-    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-4 z-50">
+  if (!isInitialized) return null;
 
-      {/* Properties Bar: Either Drawing Config OR Video Controls */}
+  return (
+    <div
+      className={`fixed z-50 flex items-center gap-4 transition-[flex-direction] duration-300 ${isVertical
+          ? (verticalSide === 'left' ? 'flex-row-reverse' : 'flex-row')
+          : 'flex-col'
+        }`}
+      style={{
+        left: position.x,
+        top: position.y,
+        transform: 'translate(-50%, -50%)' // Center the pivot point
+      }}
+    >
+
+      {/* Properties Bar: Drawing Config OR Video Controls */}
       {showProperties && (
         <div
           onMouseDown={handleMouseDown}
-          style={{ transform: `translate(${position.x}px, ${position.y}px)` }}
-          className="bg-neutral-900/90 backdrop-blur-md border border-neutral-800 rounded-2xl px-4 py-3 flex items-center gap-6 shadow-xl animate-in slide-in-from-bottom-4 fade-in duration-300 cursor-move"
+          className={`bg-neutral-900/90 backdrop-blur-md border border-neutral-800 rounded-2xl px-4 py-3 flex items-center gap-6 shadow-xl cursor-grab active:cursor-grabbing ${isVertical ? 'flex-col py-4 px-3' : 'flex-row'
+            }`}
         >
 
           {selectedVideo ? (
             // --- VIDEO CONTROLS ---
-            <div className="flex items-center gap-4">
+            <div className={`flex items-center gap-4 ${isVertical ? 'flex-col' : ''}`}>
               <button
                 onClick={onTogglePlay}
                 className="w-10 h-10 rounded-full flex items-center justify-center bg-white text-black hover:scale-110 transition-transform"
@@ -112,9 +167,9 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 {isVideoPlaying ? <Pause size={20} fill="black" /> : <Play size={20} fill="black" className="ml-0.5" />}
               </button>
 
-              <div className="w-px h-6 bg-neutral-700"></div>
+              <div className={`bg-neutral-700 ${isVertical ? 'w-6 h-px' : 'w-px h-6'}`}></div>
 
-              <div className="flex items-center gap-3">
+              <div className={`flex items-center gap-3 ${isVertical ? 'flex-col' : 'flex-row'}`}>
                 <button onClick={() => onVolumeChange && onVolumeChange(videoVolume === 0 ? 1 : 0)}>
                   {videoVolume === 0 ? <VolumeX size={20} /> : <Volume2 size={20} />}
                 </button>
@@ -125,7 +180,9 @@ const Toolbar: React.FC<ToolbarProps> = ({
                   step="0.05"
                   value={videoVolume || 0}
                   onChange={(e) => onVolumeChange && onVolumeChange(parseFloat(e.target.value))}
-                  className="w-24 h-1 bg-neutral-700 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full hover:[&::-webkit-slider-thumb]:scale-125 transition-all"
+                  className={`bg-neutral-700 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full hover:[&::-webkit-slider-thumb]:scale-125 transition-all ${isVertical ? 'h-24 w-1 -scale-y-100' : 'w-24 h-1'
+                    }`}
+                  style={isVertical ? { writingMode: 'bt-lr', WebkitAppearance: 'slider-vertical' } : {}}
                 />
               </div>
             </div>
@@ -133,7 +190,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
             // --- DRAWING CONTROLS ---
             <>
               {/* Colors */}
-              <div className="flex gap-3">
+              <div className={`flex gap-3 ${isVertical ? 'flex-col' : 'flex-row'}`}>
                 {COLORS.map((c) => (
                   <button
                     key={c.hex}
@@ -145,20 +202,37 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 ))}
               </div>
 
-              <div className="w-px h-6 bg-neutral-700"></div>
+              <div className={`bg-neutral-700 ${isVertical ? 'w-6 h-px' : 'w-px h-6'}`}></div>
 
               {/* Stroke Slider */}
-              <div className="flex items-center gap-2">
+              <div className={`flex items-center gap-2 ${isVertical ? 'flex-col' : 'flex-row'}`}>
                 <div className="w-2 h-2 rounded-full bg-neutral-500"></div>
-                <input
-                  type="range"
-                  min="1"
-                  max="20"
-                  value={activeWidth}
-                  onChange={(e) => onChangeWidth(Number(e.target.value))}
-                  className="w-24 h-1 bg-neutral-700 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full hover:[&::-webkit-slider-thumb]:scale-110 transition-all"
-                  title={`Stroke width: ${activeWidth}px`}
-                />
+
+                { /* Vertical range input can be tricky, using transform rotation or standard appearance if supported */}
+                {isVertical ? (
+                  <div className="h-24 w-4 flex items-center justify-center">
+                    <input
+                      type="range"
+                      min="1"
+                      max="20"
+                      value={activeWidth}
+                      onChange={(e) => onChangeWidth(Number(e.target.value))}
+                      className="bg-neutral-700 rounded-lg appearance-none cursor-pointer h-1 w-24 -rotate-90 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full hover:[&::-webkit-slider-thumb]:scale-110 transition-all origin-center"
+                      title={`Stroke width: ${activeWidth}px`}
+                    />
+                  </div>
+                ) : (
+                  <input
+                    type="range"
+                    min="1"
+                    max="20"
+                    value={activeWidth}
+                    onChange={(e) => onChangeWidth(Number(e.target.value))}
+                    className="w-24 h-1 bg-neutral-700 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full hover:[&::-webkit-slider-thumb]:scale-110 transition-all"
+                    title={`Stroke width: ${activeWidth}px`}
+                  />
+                )}
+
                 <div className="w-4 h-4 rounded-full bg-neutral-500"></div>
               </div>
             </>
@@ -168,7 +242,11 @@ const Toolbar: React.FC<ToolbarProps> = ({
       )}
 
       {/* Main Toolbar */}
-      <div className="bg-neutral-900/90 backdrop-blur-md border border-neutral-800 rounded-2xl px-2 py-2 flex items-center gap-2 shadow-2xl">
+      <div
+        onMouseDown={handleMouseDown}
+        className={`bg-neutral-900/90 backdrop-blur-md border border-neutral-800 rounded-2xl px-2 py-2 flex items-center gap-2 shadow-2xl cursor-grab active:cursor-grabbing ${isVertical ? 'flex-col' : 'flex-row'
+          }`}
+      >
 
         <button
           onClick={() => onSelectTool(ToolType.SELECT)}
@@ -202,7 +280,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
           <Shapes size={24} />
         </button>
 
-        <div className="w-px h-8 bg-neutral-700 mx-1"></div>
+        <div className={`bg-neutral-700 mx-1 ${isVertical ? 'w-8 h-px' : 'w-px h-8'}`}></div>
 
         {/* Media Tools */}
         <button
@@ -221,7 +299,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
           <VideoIcon size={24} />
         </button>
 
-        <div className="w-px h-8 bg-neutral-700 mx-1"></div>
+        <div className={`bg-neutral-700 mx-1 ${isVertical ? 'w-8 h-px' : 'w-px h-8'}`}></div>
 
         <button
           onClick={onClear}
